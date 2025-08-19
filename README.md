@@ -205,6 +205,7 @@ python data_utils.py import my_tournament_data.json
 - `POST /tournaments/{id}/auto-score-all` - Automatically score all unscored responses
 - `POST /tournaments/{id}/results` - Submit a manual response
 - `GET /tournaments/{id}/leaderboard` - Get tournament results
+- `GET /ai-evaluation-schema` - Get the JSON schema for AI evaluation responses
 
 ## Configuration
 

@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 import json
 import os
@@ -110,6 +110,51 @@ class TournamentResult(BaseModel):
     ai_evaluated: Optional[bool] = None
     evaluation_timestamp: Optional[str] = None
     evaluation_metrics: Optional[dict] = None
+
+class AIEvaluationResponse(BaseModel):
+    """Pydantic model for AI evaluation responses using structured outputs"""
+    score: float = Field(
+        ge=1, 
+        le=10, 
+        description="Score from 1-10 where 1-3=poor, 4-6=adequate, 7-8=good, 9-10=excellent"
+    )
+    feedback: str = Field(
+        description="Brief feedback explaining the score and highlighting strengths/weaknesses"
+    )
+    reasoning: str = Field(
+        description="Detailed reasoning for the score including specific examples from the response"
+    )
+    strengths: List[str] = Field(
+        description="List of specific strengths in the response"
+    )
+    areas_for_improvement: List[str] = Field(
+        description="List of specific areas where the response could be improved"
+    )
+    relevance_score: float = Field(
+        ge=1, 
+        le=10, 
+        description="How relevant the response is to the prompt (1-10)"
+    )
+    clarity_score: float = Field(
+        ge=1, 
+        le=10, 
+        description="How clear and well-structured the response is (1-10)"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "examples": [
+                {
+                    "score": 8.5,
+                    "feedback": "Strong response with clear structure and relevant examples",
+                    "reasoning": "The response effectively addresses the prompt with specific economic indicators and clear explanations",
+                    "strengths": ["Clear structure", "Relevant examples", "Comprehensive coverage"],
+                    "areas_for_improvement": ["Could include more recent data", "Might benefit from visual aids"],
+                    "relevance_score": 9.0,
+                    "clarity_score": 8.5
+                }
+            ]
+        }
 
 class CreateTournamentRequest(BaseModel):
     name: str
@@ -623,49 +668,7 @@ Please evaluate this response and provide a structured assessment.
             ],
             response_format={
                 "type": "json_schema",
-                "schema": {
-                    "type": "object",
-                    "properties": {
-                        "score": {
-                            "type": "number",
-                            "description": "Score from 1-10 where 1-3=poor, 4-6=adequate, 7-8=good, 9-10=excellent",
-                            "minimum": 1,
-                            "maximum": 10
-                        },
-                        "feedback": {
-                            "type": "string",
-                            "description": "Brief feedback explaining the score and highlighting strengths/weaknesses"
-                        },
-                        "reasoning": {
-                            "type": "string",
-                            "description": "Detailed reasoning for the score including specific examples from the response"
-                        },
-                        "strengths": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                            "description": "List of specific strengths in the response"
-                        },
-                        "areas_for_improvement": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                            "description": "List of specific areas where the response could be improved"
-                        },
-                        "relevance_score": {
-                            "type": "number",
-                            "description": "How relevant the response is to the prompt (1-10)",
-                            "minimum": 1,
-                            "maximum": 10
-                        },
-                        "clarity_score": {
-                            "type": "number",
-                            "description": "How clear and well-structured the response is (1-10)",
-                            "minimum": 1,
-                            "maximum": 10
-                        }
-                    },
-                    "required": ["score", "feedback", "reasoning", "strengths", "areas_for_improvement", "relevance_score", "clarity_score"],
-                    "additionalProperties": False
-                }
+                "schema": AIEvaluationResponse.schema()
             },
             max_tokens=500,
             temperature=0.3
@@ -675,22 +678,18 @@ Please evaluate this response and provide a structured assessment.
         ai_feedback = response.choices[0].message.content
         
         try:
-            # Parse the JSON response
+            # Parse and validate the JSON response using Pydantic
             feedback_data = json.loads(ai_feedback)
+            evaluation_response = AIEvaluationResponse(**feedback_data)
             
-            # Extract scores and feedback
-            score = feedback_data.get("score", 5)
-            feedback = feedback_data.get("feedback", "AI evaluation completed")
-            reasoning = feedback_data.get("reasoning", "Automated scoring")
-            strengths = feedback_data.get("strengths", [])
-            areas_for_improvement = feedback_data.get("areas_for_improvement", [])
-            relevance_score = feedback_data.get("relevance_score", 5)
-            clarity_score = feedback_data.get("clarity_score", 5)
-            
-            # Ensure score is within valid range
-            score = max(1, min(10, float(score)))
-            relevance_score = max(1, min(10, float(relevance_score)))
-            clarity_score = max(1, min(10, float(clarity_score)))
+            # Extract validated data from the Pydantic model
+            score = evaluation_response.score
+            feedback = evaluation_response.feedback
+            reasoning = evaluation_response.reasoning
+            strengths = evaluation_response.strengths
+            areas_for_improvement = evaluation_response.areas_for_improvement
+            relevance_score = evaluation_response.relevance_score
+            clarity_score = evaluation_response.clarity_score
             
             # Create comprehensive feedback
             comprehensive_feedback = f"{feedback}\n\nReasoning: {reasoning}\n\nStrengths: {', '.join(strengths) if strengths else 'None identified'}\n\nAreas for Improvement: {', '.join(areas_for_improvement) if areas_for_improvement else 'None identified'}"
@@ -734,6 +733,27 @@ Please evaluate this response and provide a structured assessment.
             score = 5
             feedback = f"AI Evaluation completed with fallback scoring. Raw response: {ai_feedback[:200]}..."
             reasoning = "Automated scoring with fallback parsing"
+            
+            result["score"] = score
+            result["feedback"] = feedback
+            result["ai_evaluated"] = True
+            result["evaluation_timestamp"] = datetime.now().isoformat()
+            
+            save_data_to_file(RESULTS_FILE, results)
+            
+            return {
+                "result_id": result_id,
+                "score": score,
+                "feedback": feedback,
+                "reasoning": reasoning,
+                "ai_evaluated": True
+            }
+        except Exception as validation_error:
+            print(f"Pydantic validation error in AI scoring: {str(validation_error)}")
+            # Fallback to basic scoring if validation fails
+            score = 5
+            feedback = f"AI Evaluation completed with fallback scoring. Validation error: {str(validation_error)}"
+            reasoning = "Automated scoring with fallback due to validation error"
             
             result["score"] = score
             result["feedback"] = feedback
@@ -874,6 +894,19 @@ async def delete_tournament(tournament_id: str):
     print(f"🗑️  Deleted tournament '{tournament.get('name', tournament_id)}' with {len(prompt_ids)} prompts and {len(results_to_delete)} results")
     
     return {"message": f"Tournament '{tournament.get('name', tournament_id)}' deleted successfully"}
+
+@app.get("/ai-evaluation-schema")
+async def get_ai_evaluation_schema():
+    """Get the JSON schema for AI evaluation responses"""
+    return {
+        "schema": AIEvaluationResponse.schema(),
+        "description": "Schema for AI evaluation responses using structured outputs",
+        "model_info": {
+            "name": "AIEvaluationResponse",
+            "fields": list(AIEvaluationResponse.__fields__.keys()),
+            "required_fields": [field for field, info in AIEvaluationResponse.__fields__.items() if info.required]
+        }
+    }
 
 @app.post("/tournaments/{tournament_id}/prompts")
 async def add_prompt_to_tournament(
