@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowRight, RefreshCw, Users, Calendar, Trash2 } from 'lucide-react';
+import { RefreshCw, Users, Calendar, Trash2 } from 'lucide-react';
 import { Tournament } from '../App';
 import axios from 'axios';
 
@@ -88,9 +88,8 @@ const TournamentList: React.FC<TournamentListProps> = ({
             style={{ cursor: 'pointer' }}
             onClick={(event) => handleCardClick(tournament, event)}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+            <div style={{ marginBottom: '12px' }}>
               <h3 style={{ margin: 0, color: '#495057' }}>{tournament.name}</h3>
-              <ArrowRight size={20} color="#667eea" />
             </div>
 
             {tournament.description && (
