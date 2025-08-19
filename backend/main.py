@@ -302,7 +302,7 @@ async def auto_generate_response(
                 {"role": "system", "content": "You are a helpful AI assistant. Please provide a comprehensive and well-reasoned response to the following prompt and question."},
                 {"role": "user", "content": full_prompt}
             ],
-            max_tokens=1000,
+            max_completion_tokens=1000,
             temperature=0.7,
             stream=True
         )
@@ -469,7 +469,7 @@ async def auto_generate_all_responses(
                         {"role": "system", "content": "You are a helpful AI assistant. Please provide a comprehensive and well-reasoned response to the following prompt and question."},
                         {"role": "user", "content": full_prompt}
                     ],
-                    max_tokens=1000,
+                    max_completion_tokens=1000,
                     temperature=0.7,
                     stream=True
                 )
