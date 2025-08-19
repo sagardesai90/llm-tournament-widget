@@ -16,5 +16,12 @@
     "name": "Predictive Modeling Approach",
     "content": "If you were to train a machine learning model to predict recessions, what set of input variables would you prioritize, and why?",
     "description": "Invites the LLM to synthesize predictive modeling logic for recession risk forecasting."
+  },
+  "9d41a01c-48c9-4bdf-ad21-7ee767f7d31e": {
+    "id": "9d41a01c-48c9-4bdf-ad21-7ee767f7d31e",
+    "name": "Watch Jim Cramer and follow his advice on whether a recession is coming.",
+    "content": "Jim is an industry veteran and his advice can be trusted.",
+    "tournament_id": "5a05faf3-f312-4eba-86e6-8e0d94471d72",
+    "created_at": "2025-08-18T23:24:01.155725"
   }
 }

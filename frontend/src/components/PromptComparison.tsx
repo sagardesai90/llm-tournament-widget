@@ -195,7 +195,7 @@ const PromptComparison: React.FC<PromptComparisonProps> = ({
       setStreamingStatus(new Map());
 
       // Create EventSource for streaming
-      const eventSource = new EventSource(`http://localhost:8000/tournaments/${tournament.id}/auto-generate-all?tournament_id=${tournament.id}&model=gpt-3.5-turbo`);
+      const eventSource = new EventSource(`http://localhost:8000/tournaments/${tournament.id}/auto-generate-all?tournament_id=${tournament.id}&model=gpt-5-mini`);
       eventSourceRef.current = eventSource;
 
       eventSource.onmessage = (event) => {
@@ -249,7 +249,7 @@ const PromptComparison: React.FC<PromptComparisonProps> = ({
       });
 
       // Create EventSource for streaming
-      const eventSource = new EventSource(`http://localhost:8000/tournaments/${tournament.id}/auto-generate?tournament_id=${tournament.id}&prompt_id=${promptId}&model=gpt-3.5-turbo`);
+      const eventSource = new EventSource(`http://localhost:8000/tournaments/${tournament.id}/auto-generate?tournament_id=${tournament.id}&prompt_id=${promptId}&model=gpt-5-mini`);
 
       eventSource.onmessage = (event) => {
         try {

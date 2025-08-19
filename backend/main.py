@@ -292,7 +292,7 @@ async def auto_generate_response(
         
         # Call OpenAI API with streaming
         response = await openai.ChatCompletion.acreate(
-            model="gpt-5-mini",  # Use GPT-5-mini for enhanced response generation
+            model=model,  # Use the model parameter passed in
             messages=[
                 {"role": "system", "content": "You are a helpful AI assistant. Please provide a comprehensive and well-reasoned response to the following prompt and question."},
                 {"role": "user", "content": full_prompt}
@@ -448,7 +448,7 @@ async def auto_generate_all_responses(
                 
                 # Call OpenAI API with streaming
                 response = await openai.ChatCompletion.acreate(
-                    model="gpt-5-mini",  # Use GPT-5-mini for enhanced response generation
+                    model=model,  # Use the model parameter passed in
                     messages=[
                         {"role": "system", "content": "You are a helpful AI assistant. Please provide a comprehensive and well-reasoned response to the following prompt and question."},
                         {"role": "user", "content": full_prompt}
