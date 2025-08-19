@@ -215,6 +215,17 @@ The application uses environment variables for configuration:
 
 - `OPENAI_API_KEY`: Your OpenAI API key (required for auto-generation)
 
+## Testing
+
+The application includes comprehensive testing infrastructure:
+
+- **Backend Tests**: Python FastAPI with pytest, covering API endpoints, data models, and business logic
+- **Frontend Tests**: React with Jest and Testing Library, covering components and user interactions
+- **Test Coverage**: Comprehensive coverage reports for both backend and frontend
+- **Easy Execution**: Simple scripts to run all tests (`backend/run_tests.py`, `frontend/run_tests.sh`)
+
+See [TESTING.md](TESTING.md) for detailed testing documentation.
+
 ## Future Enhancements
 
 - Support for other LLM providers (Claude, Gemini, etc.)
