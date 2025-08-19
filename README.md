@@ -89,6 +89,13 @@ A web application for creating and running tournaments to compare different LLM 
   - Or open a tournament and click "Delete Tournament" in the header
   - Confirm deletion in the dialog
   - **Warning**: This permanently removes the tournament, all prompts, and all results
+- **Add Prompts to Existing Tournaments**: 
+  - Open any tournament
+  - Click "Add Prompt" to expand the form
+  - Enter a prompt name and content
+  - Submit to add the new prompt
+  - **Auto-generate responses** for the new prompt immediately
+  - **AI evaluation** will score the new prompt's responses automatically
 
 ### Automated Response Generation
 
@@ -182,6 +189,7 @@ python data_utils.py import my_tournament_data.json
 
 - `POST /tournaments` - Create a new tournament
 - `DELETE /tournaments/{id}` - Delete a tournament and all associated data
+- `POST /tournaments/{id}/prompts` - Add a new prompt to an existing tournament
 - `POST /tournaments/{id}/auto-generate` - Generate response for a single prompt
 - `POST /tournaments/{id}/auto-generate-all` - Generate responses for all prompts
 - `POST /tournaments/{id}/auto-score` - Automatically score a response using AI

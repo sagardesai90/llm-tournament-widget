@@ -132,7 +132,7 @@ tmp/
 temp/
 
 # Data files (JSON files with tournament data)
-data/
+# data/
 *.json
 
 # Backup files

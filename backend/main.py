@@ -875,6 +875,38 @@ async def delete_tournament(tournament_id: str):
     
     return {"message": f"Tournament '{tournament.get('name', tournament_id)}' deleted successfully"}
 
+@app.post("/tournaments/{tournament_id}/prompts")
+async def add_prompt_to_tournament(
+    tournament_id: str,
+    prompt: Prompt
+):
+    """Add a new prompt to an existing tournament"""
+    if tournament_id not in tournaments:
+        raise HTTPException(status_code=404, detail="Tournament not found")
+    
+    # Generate a unique ID for the prompt
+    prompt_id = str(uuid.uuid4())
+    prompt.id = prompt_id
+    prompt.tournament_id = tournament_id
+    prompt.created_at = datetime.now().isoformat()
+    
+    # Add the prompt to the prompts dictionary
+    prompts[prompt_id] = prompt.dict()
+    
+    # Add the prompt ID to the tournament's prompt_ids list
+    if "prompt_ids" not in tournaments[tournament_id]:
+        tournaments[tournament_id]["prompt_ids"] = []
+    
+    tournaments[tournament_id]["prompt_ids"].append(prompt_id)
+    
+    # Save updated data to files
+    save_data_to_file(PROMPTS_FILE, prompts)
+    save_data_to_file(TOURNAMENTS_FILE, tournaments)
+    
+    print(f"📝 Added prompt '{prompt.name}' to tournament '{tournaments[tournament_id]['name']}'")
+    
+    return {"prompt_id": prompt_id, "prompt": prompt.dict()}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { ArrowLeft, Trophy, MessageSquare, Trash2, Calendar, Users } from 'lucide-react';
+import { ArrowLeft, Trophy, MessageSquare, Trash2, Calendar, Users, Plus } from 'lucide-react';
 import { Tournament, Prompt, TournamentResult } from '../App';
 import PromptComparison from './PromptComparison';
 import Leaderboard from './Leaderboard';
@@ -25,6 +25,9 @@ const TournamentView: React.FC<TournamentViewProps> = ({
   const [error, setError] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [showAddPrompt, setShowAddPrompt] = useState(false);
+  const [newPrompt, setNewPrompt] = useState({ name: '', content: '' });
+  const [addingPrompt, setAddingPrompt] = useState(false);
 
   useEffect(() => {
     fetchTournamentData();
@@ -63,6 +66,32 @@ const TournamentView: React.FC<TournamentViewProps> = ({
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to delete tournament');
       setDeleting(false);
+    }
+  };
+
+  const handleAddPrompt = async () => {
+    if (!newPrompt.name.trim() || !newPrompt.content.trim()) {
+      setError('Please provide both a name and content for the prompt');
+      return;
+    }
+
+    try {
+      setAddingPrompt(true);
+      setError('');
+
+      await axios.post(`http://localhost:8000/tournaments/${tournament.id}/prompts`, {
+        name: newPrompt.name.trim(),
+        content: newPrompt.content.trim()
+      });
+
+      // Reset form and refresh data
+      setNewPrompt({ name: '', content: '' });
+      setShowAddPrompt(false);
+      fetchTournamentData();
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to add prompt');
+    } finally {
+      setAddingPrompt(false);
     }
   };
 
@@ -349,6 +378,88 @@ const TournamentView: React.FC<TournamentViewProps> = ({
           )}
         </div>
       </div>
+
+      {/* Add New Prompt Section */}
+      <div className="card" style={{ marginBottom: '20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <h3 style={{ margin: 0, color: '#495057' }}>Add New Prompt</h3>
+          <button
+            className="btn-secondary"
+            onClick={() => setShowAddPrompt(!showAddPrompt)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '8px 16px',
+              fontSize: '14px'
+            }}
+          >
+            <Plus size={16} />
+            {showAddPrompt ? 'Cancel' : 'Add Prompt'}
+          </button>
+        </div>
+
+        {showAddPrompt && (
+          <div className="add-prompt-form">
+            <div className="form-group">
+              <label htmlFor="prompt-name">Prompt Name:</label>
+              <input
+                id="prompt-name"
+                type="text"
+                value={newPrompt.name}
+                onChange={(e) => setNewPrompt({ ...newPrompt, name: e.target.value })}
+                placeholder="e.g., Alternative Approach"
+                style={{ marginBottom: '12px' }}
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="prompt-content">Prompt Content:</label>
+              <textarea
+                id="prompt-content"
+                value={newPrompt.content}
+                onChange={(e) => setNewPrompt({ ...newPrompt, content: e.target.value })}
+                placeholder="Enter your new prompt here..."
+                rows={3}
+                style={{ marginBottom: '16px' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+              <button
+                className="btn"
+                onClick={handleAddPrompt}
+                disabled={addingPrompt || !newPrompt.name.trim() || !newPrompt.content.trim()}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '10px 20px',
+                  fontSize: '14px'
+                }}
+              >
+                {addingPrompt ? (
+                  <>
+                    <div className="spin" style={{ width: '16px', height: '16px', border: '2px solid transparent', borderTop: '2px solid currentColor', borderRadius: '50%' }} />
+                    Adding...
+                  </>
+                ) : (
+                  <>
+                    <Plus size={16} />
+                    Add Prompt
+                  </>
+                )}
+              </button>
+
+              <span style={{ fontSize: '12px', color: '#6c757d' }}>
+                After adding, you can auto-generate responses and see AI evaluation
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {error && <div className="error">{error}</div>}
     </div>
   );
 };
