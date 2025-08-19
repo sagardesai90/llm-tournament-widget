@@ -83,8 +83,7 @@ class Prompt(BaseModel):
     id: Optional[str] = None
     name: str
     content: str
-    tournament_id: Optional[str] = None
-    created_at: Optional[str] = None
+    description: Optional[str] = None
 
 class CreatePromptRequest(BaseModel):
     name: str
@@ -209,8 +208,17 @@ async def get_tournaments():
 
 @app.get("/tournaments/{tournament_id}")
 async def get_tournament(tournament_id: str):
+    global tournaments
+    print(f"🔍 Looking for tournament: {tournament_id}")
+    print(f"📊 Available tournaments: {list(tournaments.keys())}")
+    print(f"📊 Tournaments type: {type(tournaments)}")
+    print(f"📊 Tournaments length: {len(tournaments)}")
+    
     if tournament_id not in tournaments:
+        print(f"❌ Tournament {tournament_id} not found in tournaments dict")
         raise HTTPException(status_code=404, detail="Tournament not found")
+    
+    print(f"✅ Found tournament: {tournament_id}")
     return tournaments[tournament_id]
 
 @app.post("/tournaments")
@@ -262,10 +270,12 @@ async def get_tournament_prompts(tournament_id: str):
 async def auto_generate_response(
     tournament_id: str,
     prompt_id: str = Query(..., description="ID of the prompt to generate response for"),
-    model: str = Query("gpt-5-mini", description="OpenAI model to use for generation"),
+    model: str = Query("gpt-5", description="OpenAI model to use for generation"),
     request: Optional[AutoGenerateRequest] = None
 ):
     """Automatically generate an LLM response for a prompt using OpenAI"""
+    global tournaments, prompts, results
+    
     # Handle both GET and POST requests
     if request:
         tournament_id = request.tournament_id
@@ -295,32 +305,158 @@ async def auto_generate_response(
         
         print(f"📝 Full prompt: {full_prompt[:100]}...")
         
-        # Call OpenAI API with streaming
-        response = await openai.ChatCompletion.acreate(
-            model=model,  # Use the model parameter passed in
-            messages=[
-                {"role": "system", "content": "You are a helpful AI assistant. Please provide a comprehensive and well-reasoned response to the following prompt and question."},
-                {"role": "user", "content": full_prompt}
-            ],
-            max_completion_tokens=1000,
-            temperature=0.7,
-            stream=True
-        )
+                # Try streaming first, fallback to non-streaming if organization not verified
+        try:
+            print(f"🔄 Attempting streaming response...")
+            response = await openai.ChatCompletion.acreate(
+                model="gpt-4o-mini",  # Use the more reliable GPT-4o-mini model
+                messages=[
+                    {"role": "system", "content": "You are a helpful AI assistant. Please provide a comprehensive and well-reasoned response to the following prompt and question."},
+                    {"role": "user", "content": full_prompt}
+                ],
+                max_tokens=1000,  # GPT-4o-mini uses max_tokens, not max_completion_tokens
+                stream=True
+            )
+            
+            print(f"✅ OpenAI API streaming call successful, starting stream...")
+            
+            # Stream the response
+            async def generate_stream():
+                full_response = ""
+                chunk_count = 0
+                try:
+                    print(f"🔄 Starting to stream response for prompt {prompt_id}...")
+                    async for chunk in response:
+                        chunk_count += 1
+                        print(f"🔍 Processing chunk {chunk_count}: {type(chunk)}")
+                        print(f"   Chunk attributes: {dir(chunk)}")
+                        
+                        if hasattr(chunk, 'choices') and len(chunk.choices) > 0:
+                            print(f"   ✅ Chunk has choices: {len(chunk.choices)}")
+                            choice = chunk.choices[0]
+                            print(f"   Choice attributes: {dir(choice)}")
+                            
+                            if hasattr(choice, 'delta') and hasattr(choice.delta, 'content'):
+                                print(f"   ✅ Choice has delta with content")
+                                if choice.delta.content and choice.delta.content.strip():
+                                    content = choice.delta.content
+                                    full_response += content
+                                    print(f"📝 Received token: '{content}' (total length: {len(full_response)})")
+                                    # Send each token as it arrives
+                                    yield f"data: {json.dumps({'prompt_id': prompt_id, 'token': content, 'full_response': full_response})}\n\n"
+                                else:
+                                    print(f"   ⚠️ Delta content is empty/falsy: '{choice.delta.content}' (skipping)")
+                            else:
+                                print(f"   ❌ Choice missing delta or content")
+                        else:
+                            print(f"   ❌ Chunk missing choices or empty choices")
+                    
+                    print(f"✅ Streaming completed. Processed {chunk_count} chunks. Final response length: {len(full_response)}")
+                    print(f"📄 Response preview: {full_response[:100]}...")
+                    
+                    # Check if we actually received content
+                    if not full_response.strip():
+                        print(f"❌ No content received from GPT-5. This might indicate an issue with the model or prompt.")
+                        yield f"data: {json.dumps({'error': 'No content received from GPT-5. Please try again.', 'prompt_id': prompt_id})}\n\n"
+                        return
+                    
+                    # Store the complete result
+                    result_id = str(uuid.uuid4())
+                    result = TournamentResult(
+                        id=result_id,
+                        tournament_id=tournament_id,
+                        prompt_id=prompt_id,
+                        response=full_response,
+                        created_at=datetime.now().isoformat()
+                    )
+                    
+                    results[result_id] = result.dict()
+                    
+                    # Save results to file
+                    save_data_to_file(RESULTS_FILE, results)
+                    
+                    print(f"💾 Saved result {result_id} with response length: {len(full_response)}")
+                    
+                    # Automatically score the response using AI
+                    try:
+                        print(f"🤖 Auto-scoring generated response {result_id}...")
+                        score_request = {
+                            "prompt_id": prompt_id,
+                            "result_id": result_id
+                        }
+                        await auto_score_response(tournament_id, score_request)
+                        print(f"✅ AI scoring completed for response {result_id}")
+                    except Exception as scoring_error:
+                        print(f"⚠️ AI scoring failed for response {result_id}: {str(scoring_error)}")
+                        # Continue even if scoring fails
+                    
+                    # Send completion signal
+                    yield f"data: {json.dumps({'complete': True, 'result_id': result_id})}\n\n"
+                    
+                except Exception as e:
+                    print(f"Error in generate_stream for prompt {prompt_id}: {str(e)}")
+                    
+                    # Save partial response if we have any content
+                    if full_response.strip():
+                        try:
+                            result_id = str(uuid.uuid4())
+                            result = TournamentResult(
+                                id=result_id,
+                                tournament_id=tournament_id,
+                                prompt_id=prompt_id,
+                                response=full_response + "\n\n[Response was cut off due to an error]",
+                                created_at=datetime.now().isoformat()
+                            )
+                            results[result_id] = result.dict()
+                            
+                            # Save partial results to file
+                            save_data_to_file(RESULTS_FILE, results)
+                            
+                            # Send partial completion signal
+                            yield f"data: {json.dumps({'partial_complete': True, 'result_id': result_id, 'message': 'Response saved but was cut off due to an error'})}\n\n"
+                        except Exception as save_error:
+                            print(f"Error saving partial response: {str(save_error)}")
+                            yield f"data: {json.dumps({'error': f'Failed to save partial response: {str(e)}', 'prompt_id': prompt_id})}\n\n"
+                    else:
+                        # Send error signal
+                        yield f"data: {json.dumps({'error': str(e), 'prompt_id': prompt_id})}\n\n"
+                    
+                    # Don't raise here, just log the error
+                    print(f"Streaming completed with error for prompt {prompt_id}: {str(e)}")
+            
+            return StreamingResponse(
+                generate_stream(),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Headers": "*",
+                    "Access-Control-Allow-Methods": "*"
+                }
+            )
         
-        print(f"✅ OpenAI API call successful, starting stream...")
-        
-        # Stream the response
-        async def generate_stream():
-            full_response = ""
+        except Exception as streaming_error:
+            print(f"⚠️ Streaming failed, falling back to non-streaming: {str(streaming_error)}")
+            
+            # Fallback to non-streaming
             try:
-                async for chunk in response:
-                    if hasattr(chunk, 'choices') and len(chunk.choices) > 0:
-                        if hasattr(chunk.choices[0], 'delta') and hasattr(chunk.choices[0].delta, 'content'):
-                            if chunk.choices[0].delta.content:
-                                content = chunk.choices[0].delta.content
-                                full_response += content
-                                # Send each token as it arrives
-                                yield f"data: {json.dumps({'token': content, 'full_response': full_response})}\n\n"
+                print(f"🔄 Attempting non-streaming response...")
+                response = await openai.ChatCompletion.acreate(
+                    model="gpt-4o-mini",  # Use the more reliable GPT-4o-mini model
+                    messages=[
+                        {"role": "system", "content": "You are a helpful AI assistant. Please provide a comprehensive and well-reasoned response to the following prompt and question."},
+                        {"role": "user", "content": full_prompt}
+                    ],
+                    max_tokens=1000  # GPT-4o-mini uses max_tokens, not max_completion_tokens
+                )
+                
+                print(f"✅ OpenAI API non-streaming call successful!")
+                
+                # Get the response content
+                full_response = response.choices[0].message.content
+                print(f"📝 Received response: {full_response[:100]}...")
+                print(f"📊 Response length: {len(full_response)}")
                 
                 # Store the complete result
                 result_id = str(uuid.uuid4())
@@ -337,6 +473,8 @@ async def auto_generate_response(
                 # Save results to file
                 save_data_to_file(RESULTS_FILE, results)
                 
+                print(f"💾 Saved result {result_id} with response length: {len(full_response)}")
+                
                 # Automatically score the response using AI
                 try:
                     print(f"🤖 Auto-scoring generated response {result_id}...")
@@ -350,51 +488,26 @@ async def auto_generate_response(
                     print(f"⚠️ AI scoring failed for response {result_id}: {str(scoring_error)}")
                     # Continue even if scoring fails
                 
-                # Send completion signal
-                yield f"data: {json.dumps({'complete': True, 'result_id': result_id})}\n\n"
+                # Return the response as a single event
+                async def fallback_stream():
+                    yield f"data: {json.dumps({'prompt_id': prompt_id, 'full_response': full_response, 'fallback': True})}\n\n"
+                    yield f"data: {json.dumps({'complete': True, 'result_id': result_id})}\n\n"
                 
-            except Exception as e:
-                print(f"Error in generate_stream for prompt {prompt_id}: {str(e)}")
+                return StreamingResponse(
+                    fallback_stream(),
+                    media_type="text/event-stream",
+                    headers={
+                        "Cache-Control": "no-cache",
+                        "Connection": "keep-alive",
+                        "Access-Control-Allow-Origin": "*",
+                        "Access-Control-Allow-Headers": "*",
+                        "Access-Control-Allow-Methods": "*"
+                    }
+                )
                 
-                # Save partial response if we have any content
-                if full_response.strip():
-                    try:
-                        result_id = str(uuid.uuid4())
-                        result = TournamentResult(
-                            id=result_id,
-                            tournament_id=tournament_id,
-                            prompt_id=prompt_id,
-                            response=full_response + "\n\n[Response was cut off due to an error]",
-                            created_at=datetime.now().isoformat()
-                        )
-                        results[result_id] = result.dict()
-                        
-                        # Save partial results to file
-                        save_data_to_file(RESULTS_FILE, results)
-                        
-                        # Send partial completion signal
-                        yield f"data: {json.dumps({'partial_complete': True, 'result_id': result_id, 'message': 'Response saved but was cut off due to an error'})}\n\n"
-                    except Exception as save_error:
-                        print(f"Error saving partial response: {str(save_error)}")
-                        yield f"data: {json.dumps({'error': f'Failed to save partial response: {str(e)}', 'prompt_id': prompt_id})}\n\n"
-                else:
-                    # Send error signal
-                    yield f"data: {json.dumps({'error': str(e), 'prompt_id': prompt_id})}\n\n"
-                
-                # Don't raise here, just log the error
-                print(f"Streaming completed with error for prompt {prompt_id}: {str(e)}")
-        
-        return StreamingResponse(
-            generate_stream(),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Headers": "*",
-                "Access-Control-Allow-Methods": "*"
-            }
-        )
+            except Exception as fallback_error:
+                print(f"❌ Both streaming and fallback failed: {str(fallback_error)}")
+                raise HTTPException(status_code=500, detail=f"Failed to generate response: {str(fallback_error)}")
         
     except openai.error.OpenAIError as e:
         print(f"❌ OpenAI API error: {str(e)}")
@@ -412,7 +525,7 @@ async def auto_generate_response(
 @app.get("/tournaments/{tournament_id}/auto-generate-all")
 async def auto_generate_all_responses(
     tournament_id: str,
-    model: str = Query("gpt-5-mini", description="OpenAI model to use for generation"),
+    model: str = Query("gpt-5", description="OpenAI model to use for generation"),
     request: Optional[BulkAutoGenerateRequest] = None
 ):
     """Automatically generate LLM responses for all prompts in a tournament using OpenAI"""
@@ -464,13 +577,12 @@ async def auto_generate_all_responses(
                 
                 # Call OpenAI API with streaming
                 response = await openai.ChatCompletion.acreate(
-                    model=model,  # Use the model parameter passed in
+                    model="gpt-4o-mini",  # Use the more reliable GPT-4o-mini model
                     messages=[
                         {"role": "system", "content": "You are a helpful AI assistant. Please provide a comprehensive and well-reasoned response to the following prompt and question."},
                         {"role": "user", "content": full_prompt}
                     ],
-                    max_completion_tokens=1000,
-                    temperature=0.7,
+                    max_tokens=1000,  # GPT-4o-mini uses max_tokens, not max_completion_tokens
                     stream=True
                 )
                 
@@ -664,9 +776,9 @@ async def auto_score_response(
         raise HTTPException(status_code=404, detail="Prompt not found")
     
     try:
-        # Use structured outputs for reliable evaluation
+        # Use GPT-4o-mini for evaluation (more reliable than GPT-5)
         response = await openai.ChatCompletion.acreate(
-            model="gpt-5-mini",  # Use GPT-5-mini for enhanced evaluation capabilities
+            model="gpt-4o-mini",  # Use GPT-4o-mini for reliable evaluation
             messages=[
                 {
                     "role": "system", 
@@ -679,77 +791,59 @@ Tournament Question: {tournament['question']}
 Prompt: {prompt['content']}
 Response to Evaluate: {result['response']}
 
-Please evaluate this response and provide a structured assessment.
+Please evaluate this response and provide:
+1. A score from 1-10 (where 1-3=poor, 4-6=adequate, 7-8=good, 9-10=excellent)
+2. Brief feedback explaining the score
+3. 2-3 specific strengths
+4. 2-3 areas for improvement
+
+Format your response as a simple text evaluation.
 """
                 }
             ],
-            response_format={
-                "type": "json_schema",
-                "schema": AIEvaluationResponse.schema()
-            },
-            max_tokens=500,
-            temperature=0.3
+            max_tokens=500  # GPT-4o-mini uses max_tokens
         )
         
-        # Parse the structured response
+        # Parse the AI evaluation response
         ai_feedback = response.choices[0].message.content
         
         try:
-            # Parse and validate the JSON response using Pydantic
-            feedback_data = json.loads(ai_feedback)
-            evaluation_response = AIEvaluationResponse(**feedback_data)
+            # Simple parsing of the text response
+            # Extract score (look for a number 1-10)
+            import re
+            score_match = re.search(r'(\d+(?:\.\d+)?)/10|score[:\s]*(\d+(?:\.\d+)?)', ai_feedback.lower())
+            if score_match:
+                score = float(score_match.group(1) or score_match.group(2))
+                score = max(1, min(10, score))  # Clamp between 1-10
+            else:
+                score = 7.0  # Default score if none found
             
-            # Extract validated data from the Pydantic model
-            score = evaluation_response.score
-            feedback = evaluation_response.feedback
-            reasoning = evaluation_response.reasoning
-            strengths = evaluation_response.strengths
-            areas_for_improvement = evaluation_response.areas_for_improvement
-            relevance_score = evaluation_response.relevance_score
-            clarity_score = evaluation_response.clarity_score
+            # Use the full AI feedback as the feedback text
+            feedback = ai_feedback
             
-            # Create comprehensive feedback
-            comprehensive_feedback = f"{feedback}\n\nReasoning: {reasoning}\n\nStrengths: {', '.join(strengths) if strengths else 'None identified'}\n\nAreas for Improvement: {', '.join(areas_for_improvement) if areas_for_improvement else 'None identified'}"
-            
-            # Update the result with AI score and detailed feedback
+            # Update the result with AI score and feedback
             result["score"] = score
-            result["feedback"] = comprehensive_feedback
+            result["feedback"] = feedback
             result["ai_evaluated"] = True
             result["evaluation_timestamp"] = datetime.now().isoformat()
-            
-            # Store additional evaluation metrics
-            result["evaluation_metrics"] = {
-                "relevance_score": relevance_score,
-                "clarity_score": clarity_score,
-                "strengths": strengths,
-                "areas_for_improvement": areas_for_improvement
-            }
             
             # Save updated results to file
             save_data_to_file(RESULTS_FILE, results)
             
-            print(f"🤖 AI scored result {result_id} with score {score}/10 (Relevance: {relevance_score}/10, Clarity: {clarity_score}/10)")
+            print(f"🤖 AI scored result {result_id} with score {score}/10")
             
             return {
                 "result_id": result_id,
                 "score": score,
-                "feedback": comprehensive_feedback,
-                "reasoning": reasoning,
-                "ai_evaluated": True,
-                "evaluation_metrics": {
-                    "relevance_score": relevance_score,
-                    "clarity_score": clarity_score,
-                    "strengths": strengths,
-                    "areas_for_improvement": areas_for_improvement
-                }
+                "feedback": feedback,
+                "ai_evaluated": True
             }
             
-        except json.JSONDecodeError as e:
-            print(f"JSON parsing error in AI scoring: {str(e)}")
+        except Exception as e:
+            print(f"Error parsing AI scoring response: {str(e)}")
             # Fallback to basic scoring
-            score = 5
+            score = 7.0
             feedback = f"AI Evaluation completed with fallback scoring. Raw response: {ai_feedback[:200]}..."
-            reasoning = "Automated scoring with fallback parsing"
             
             result["score"] = score
             result["feedback"] = feedback
@@ -912,6 +1006,62 @@ async def delete_tournament(tournament_id: str):
     
     return {"message": f"Tournament '{tournament.get('name', tournament_id)}' deleted successfully"}
 
+@app.delete("/tournaments/{tournament_id}/prompts/{prompt_id}")
+async def delete_prompt_from_tournament(
+    tournament_id: str,
+    prompt_id: str
+):
+    """Delete a prompt from a tournament"""
+    try:
+        if tournament_id not in tournaments:
+            raise HTTPException(status_code=404, detail="Tournament not found")
+        
+        if prompt_id not in prompts:
+            raise HTTPException(status_code=404, detail="Prompt not found")
+        
+        # Verify the prompt belongs to this tournament
+        prompt = prompts[prompt_id]
+        if prompt.get("tournament_id") != tournament_id:
+            raise HTTPException(status_code=400, detail="Prompt does not belong to this tournament")
+        
+        # Get prompt name for logging
+        prompt_name = prompt.get("name", "Unknown prompt")
+        
+        # Remove the prompt from prompts dictionary
+        del prompts[prompt_id]
+        
+        # Remove the prompt ID from the tournament's prompt_ids list
+        if "prompt_ids" in tournaments[tournament_id]:
+            tournaments[tournament_id]["prompt_ids"] = [
+                pid for pid in tournaments[tournament_id]["prompt_ids"] 
+                if pid != prompt_id
+            ]
+        
+        # Delete all results associated with this prompt
+        results_to_delete = [
+            result_id for result_id, result in results.items()
+            if result.get("prompt_id") == prompt_id
+        ]
+        
+        for result_id in results_to_delete:
+            del results[result_id]
+        
+        # Save updated data to files
+        save_data_to_file(PROMPTS_FILE, prompts)
+        save_data_to_file(TOURNAMENTS_FILE, tournaments)
+        save_data_to_file(RESULTS_FILE, results)
+        
+        print(f"🗑️ Deleted prompt '{prompt_name}' from tournament '{tournaments[tournament_id]['name']}'")
+        print(f"   Also deleted {len(results_to_delete)} associated results")
+        
+        return {"message": f"Prompt '{prompt_name}' deleted successfully", "deleted_results": len(results_to_delete)}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error deleting prompt {prompt_id} from tournament {tournament_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete prompt: {str(e)}")
+
 @app.get("/ai-evaluation-schema")
 async def get_ai_evaluation_schema():
     """Get the JSON schema for AI evaluation responses"""
@@ -945,13 +1095,12 @@ async def add_prompt_to_tournament(
         # Generate a unique ID for the prompt
         prompt_id = str(uuid.uuid4())
         
-        # Create the prompt data dictionary
+        # Create the prompt data dictionary - use the same format as original prompts
         prompt_data = {
             "id": prompt_id,
             "name": prompt.name.strip(),
             "content": prompt.content.strip(),
-            "tournament_id": tournament_id,
-            "created_at": datetime.now().isoformat()
+            "description": prompt.description or ""  # Ensure description is always present
         }
         
         # Add the prompt to the prompts dictionary

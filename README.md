@@ -21,7 +21,7 @@ A web application for creating and running tournaments to compare different LLM 
 
 - Python 3.8+
 - Node.js 16+
-- OpenAI API key with access to **GPT-5-mini** (required for AI evaluation and response generation)
+- OpenAI API key with access to **GPT-4o-mini** (required for AI evaluation and response generation)
 
 ### Backend Setup
 
@@ -46,7 +46,7 @@ A web application for creating and running tournaments to compare different LLM 
    echo "OPENAI_API_KEY=your_actual_api_key_here" > .env
    ```
    
-   **Important**: Make sure your OpenAI API key has access to GPT-5-mini for the AI evaluation features to work properly.
+   **Important**: Make sure your OpenAI API key has access to GPT-4o-mini for the AI evaluation features to work properly.
 
 5. Start the backend server:
    ```bash
@@ -114,7 +114,7 @@ After creating a tournament, you have two options:
 2. **Individual Generation**: Click "Auto-Generate" on specific prompt cards to generate responses one at a time
 
 The system will:
-- Use **OpenAI's GPT-5-mini** model for enhanced response quality and evaluation
+- Use **OpenAI's GPT-4o-mini** model for enhanced response quality and evaluation
 - Combine your prompt with the tournament question
 - Generate comprehensive responses
 - **Automatically score responses using AI** (1-10 scale)
@@ -127,7 +127,7 @@ The system will:
 The system automatically evaluates responses using AI:
 
 - **Automatic Scoring**: Responses are scored immediately when generated
-- **AI Evaluation**: Uses **OpenAI's GPT-5-mini** to assess response quality, relevance, and clarity
+- **AI Evaluation**: Uses **OpenAI's GPT-4o-mini** to assess response quality, relevance, and clarity
 - **Structured Outputs**: Leverages OpenAI's latest structured outputs feature for reliable, schema-compliant evaluation
 - **Comprehensive Metrics**: Provides detailed scoring across multiple dimensions:
   - **Overall Score**: 1-10 scale for overall response quality

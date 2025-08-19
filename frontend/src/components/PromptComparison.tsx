@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import axios from 'axios';
-import { Send, Star, MessageSquare, Zap, Loader, ChevronDown, ChevronUp, Bot } from 'lucide-react';
+import { Send, Star, MessageSquare, Zap, Loader, ChevronDown, ChevronUp, Bot, Trash2 } from 'lucide-react';
 import { Tournament, Prompt, TournamentResult } from '../App';
 
 interface PromptComparisonProps {
@@ -54,6 +54,33 @@ const PromptComparison: React.FC<PromptComparisonProps> = ({
     setResponse('');
     setError('');
     setSuccess('');
+  };
+
+  const handleDeletePrompt = async (promptId: string, promptName: string) => {
+    if (!window.confirm(`Are you sure you want to delete the prompt "${promptName}"? This will also delete all associated responses and cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError('');
+      setSuccess('');
+
+      await axios.delete(`http://localhost:8000/tournaments/${tournament.id}/prompts/${promptId}`);
+
+      setSuccess(`Prompt "${promptName}" deleted successfully!`);
+      setTimeout(() => setSuccess(''), 3000);
+
+      // Refresh the data to show the updated prompt list
+      onResultSubmitted();
+    } catch (error: any) {
+      console.error('Error deleting prompt:', error);
+      const errorMessage = error.response?.data?.detail || 'Failed to delete prompt. Please try again.';
+      setError(errorMessage);
+      setTimeout(() => setError(''), 5000);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const toggleResponseExpansion = (promptId: string) => {
@@ -195,7 +222,7 @@ const PromptComparison: React.FC<PromptComparisonProps> = ({
       setStreamingStatus(new Map());
 
       // Create EventSource for streaming
-      const eventSource = new EventSource(`http://localhost:8000/tournaments/${tournament.id}/auto-generate-all?tournament_id=${tournament.id}&model=gpt-5-mini`);
+      const eventSource = new EventSource(`http://localhost:8000/tournaments/${tournament.id}/auto-generate-all?tournament_id=${tournament.id}&model=gpt-4o-mini`);
       eventSourceRef.current = eventSource;
 
       eventSource.onmessage = (event) => {
@@ -249,7 +276,7 @@ const PromptComparison: React.FC<PromptComparisonProps> = ({
       });
 
       // Create EventSource for streaming
-      const eventSource = new EventSource(`http://localhost:8000/tournaments/${tournament.id}/auto-generate?tournament_id=${tournament.id}&prompt_id=${promptId}&model=gpt-5-mini`);
+      const eventSource = new EventSource(`http://localhost:8000/tournaments/${tournament.id}/auto-generate?tournament_id=${tournament.id}&prompt_id=${promptId}&model=gpt-4o-mini`);
 
       eventSource.onmessage = (event) => {
         try {
@@ -647,12 +674,45 @@ const PromptComparison: React.FC<PromptComparisonProps> = ({
               onClick={() => handlePromptSelect(prompt)}
             >
               <div style={{ marginBottom: '12px' }}>
-                <h4 style={{ margin: '0 0 8px 0', color: '#495057' }}>{prompt.name}</h4>
-                {prompt.description && (
-                  <p style={{ fontSize: '14px', color: '#6c757d', marginBottom: '8px' }}>
-                    {prompt.description}
-                  </p>
-                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div style={{ flex: 1 }}>
+                    <h4 style={{ margin: '0 0 8px 0', color: '#495057' }}>{prompt.name}</h4>
+                    {prompt.description && (
+                      <p style={{ fontSize: '14px', color: '#6c757d', marginBottom: '8px' }}>
+                        {prompt.description}
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeletePrompt(prompt.id, prompt.name);
+                    }}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: '#dc3545',
+                      padding: '4px',
+                      borderRadius: '4px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'all 0.2s ease'
+                    }}
+                    title="Delete prompt"
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = '#f8d7da';
+                      e.currentTarget.style.color = '#721c24';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                      e.currentTarget.style.color = '#dc3545';
+                    }}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
               </div>
 
               <div style={{ marginBottom: '12px' }}>
