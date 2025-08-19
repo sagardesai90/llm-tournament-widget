@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -261,8 +261,8 @@ async def get_tournament_prompts(tournament_id: str):
 @app.get("/tournaments/{tournament_id}/auto-generate")
 async def auto_generate_response(
     tournament_id: str,
-    prompt_id: str = None,
-    model: str = "gpt-3.5-turbo",
+    prompt_id: str = Query(..., description="ID of the prompt to generate response for"),
+    model: str = Query("gpt-5-mini", description="OpenAI model to use for generation"),
     request: Optional[AutoGenerateRequest] = None
 ):
     """Automatically generate an LLM response for a prompt using OpenAI"""
@@ -271,7 +271,8 @@ async def auto_generate_response(
         tournament_id = request.tournament_id
         prompt_id = request.prompt_id
         model = request.model
-    elif not prompt_id:
+    
+    if not prompt_id:
         raise HTTPException(status_code=400, detail="prompt_id is required")
     
     if tournament_id not in tournaments:
@@ -287,8 +288,12 @@ async def auto_generate_response(
         tournament = tournaments[tournament_id]
         prompt = prompts[prompt_id]
         
+        print(f"🚀 Starting auto-generation for prompt '{prompt['name']}' using model {model}")
+        
         # Construct the full prompt by combining the prompt content with the tournament question
         full_prompt = f"{prompt['content']}\n\nQuestion: {tournament['question']}"
+        
+        print(f"📝 Full prompt: {full_prompt[:100]}...")
         
         # Call OpenAI API with streaming
         response = await openai.ChatCompletion.acreate(
@@ -301,6 +306,8 @@ async def auto_generate_response(
             temperature=0.7,
             stream=True
         )
+        
+        print(f"✅ OpenAI API call successful, starting stream...")
         
         # Stream the response
         async def generate_stream():
@@ -390,15 +397,22 @@ async def auto_generate_response(
         )
         
     except openai.error.OpenAIError as e:
+        print(f"❌ OpenAI API error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"OpenAI API error: {str(e)}")
     except Exception as e:
+        print(f"❌ Unexpected error in auto_generate_response: {str(e)}")
+        print(f"   Tournament ID: {tournament_id}")
+        print(f"   Prompt ID: {prompt_id}")
+        print(f"   Model: {model}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error generating response: {str(e)}")
 
 @app.post("/tournaments/{tournament_id}/auto-generate-all")
 @app.get("/tournaments/{tournament_id}/auto-generate-all")
 async def auto_generate_all_responses(
     tournament_id: str,
-    model: str = "gpt-3.5-turbo",
+    model: str = Query("gpt-5-mini", description="OpenAI model to use for generation"),
     request: Optional[BulkAutoGenerateRequest] = None
 ):
     """Automatically generate LLM responses for all prompts in a tournament using OpenAI"""
@@ -418,6 +432,8 @@ async def auto_generate_all_responses(
     
     if not tournament_prompts:
         raise HTTPException(status_code=404, detail="No prompts found for tournament")
+    
+    print(f"🚀 Starting bulk auto-generation for tournament '{tournament['name']}' using model {model}")
     
     async def generate_all_stream():
         generated_results = []
