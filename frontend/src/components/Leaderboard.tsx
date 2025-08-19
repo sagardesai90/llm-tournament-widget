@@ -186,8 +186,8 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
             <RefreshCw size={16} style={{ marginRight: '8px' }} />
             Refresh
           </button>
-          <button 
-            className="btn-primary" 
+          <button
+            className="btn-primary"
             onClick={handleRescoreAll}
             disabled={autoScoring}
           >
