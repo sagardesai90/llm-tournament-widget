@@ -53,6 +53,15 @@ A web application for creating and running tournaments to compare different LLM 
    python3 main.py
    ```
 
+### Sample Data
+
+The repository includes sample tournament data in `backend/data/` to help you get started:
+- **Sample tournaments** with realistic prompt engineering scenarios
+- **Example prompts** demonstrating different approaches
+- **AI-generated responses** with scores and evaluations
+
+You can use this data to explore the system or start fresh with your own tournaments.
+
 ### Frontend Setup
 
 1. Navigate to the frontend directory:
