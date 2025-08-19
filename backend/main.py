@@ -83,7 +83,8 @@ class Prompt(BaseModel):
     id: Optional[str] = None
     name: str
     content: str
-    description: Optional[str] = None
+    tournament_id: Optional[str] = None
+    created_at: Optional[str] = None
 
 class CreatePromptRequest(BaseModel):
     name: str
@@ -914,31 +915,51 @@ async def add_prompt_to_tournament(
     prompt: Prompt
 ):
     """Add a new prompt to an existing tournament"""
-    if tournament_id not in tournaments:
-        raise HTTPException(status_code=404, detail="Tournament not found")
-    
-    # Generate a unique ID for the prompt
-    prompt_id = str(uuid.uuid4())
-    prompt.id = prompt_id
-    prompt.tournament_id = tournament_id
-    prompt.created_at = datetime.now().isoformat()
-    
-    # Add the prompt to the prompts dictionary
-    prompts[prompt_id] = prompt.dict()
-    
-    # Add the prompt ID to the tournament's prompt_ids list
-    if "prompt_ids" not in tournaments[tournament_id]:
-        tournaments[tournament_id]["prompt_ids"] = []
-    
-    tournaments[tournament_id]["prompt_ids"].append(prompt_id)
-    
-    # Save updated data to files
-    save_data_to_file(PROMPTS_FILE, prompts)
-    save_data_to_file(TOURNAMENTS_FILE, tournaments)
-    
-    print(f"📝 Added prompt '{prompt.name}' to tournament '{tournaments[tournament_id]['name']}'")
-    
-    return {"prompt_id": prompt_id, "prompt": prompt.dict()}
+    try:
+        if tournament_id not in tournaments:
+            raise HTTPException(status_code=404, detail="Tournament not found")
+        
+        # Validate prompt data
+        if not prompt.name or not prompt.name.strip():
+            raise HTTPException(status_code=400, detail="Prompt name is required")
+        
+        if not prompt.content or not prompt.content.strip():
+            raise HTTPException(status_code=400, detail="Prompt content is required")
+        
+        # Generate a unique ID for the prompt
+        prompt_id = str(uuid.uuid4())
+        
+        # Create the prompt data dictionary
+        prompt_data = {
+            "id": prompt_id,
+            "name": prompt.name.strip(),
+            "content": prompt.content.strip(),
+            "tournament_id": tournament_id,
+            "created_at": datetime.now().isoformat()
+        }
+        
+        # Add the prompt to the prompts dictionary
+        prompts[prompt_id] = prompt_data
+        
+        # Add the prompt ID to the tournament's prompt_ids list
+        if "prompt_ids" not in tournaments[tournament_id]:
+            tournaments[tournament_id]["prompt_ids"] = []
+        
+        tournaments[tournament_id]["prompt_ids"].append(prompt_id)
+        
+        # Save updated data to files
+        save_data_to_file(PROMPTS_FILE, prompts)
+        save_data_to_file(TOURNAMENTS_FILE, tournaments)
+        
+        print(f"📝 Added prompt '{prompt.name}' to tournament '{tournaments[tournament_id]['name']}'")
+        
+        return {"prompt_id": prompt_id, "prompt": prompt_data}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error adding prompt to tournament {tournament_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to add prompt: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
