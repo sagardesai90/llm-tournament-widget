@@ -100,6 +100,24 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
     }
   };
 
+  const handleRescoreAll = async () => {
+    try {
+      setAutoScoring(true);
+      setError('');
+      setSuccess('');
+
+      const response = await axios.post(`http://localhost:8000/tournaments/${tournamentId}/rescore-all`);
+
+      setSuccess(response.data.message);
+      setTimeout(() => setSuccess(''), 5000);
+      onRefresh();
+    } catch (error: any) {
+      setError(error.response?.data?.detail || 'Failed to rescore all responses');
+    } finally {
+      setAutoScoring(false);
+    }
+  };
+
   const handleAutoScoreAll = async () => {
     try {
       setAutoScoring(true);
@@ -163,10 +181,20 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <h3>Tournament Leaderboard</h3>
-        <button className="btn-secondary" onClick={fetchLeaderboard}>
-          <RefreshCw size={16} style={{ marginRight: '8px' }} />
-          Refresh
-        </button>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button className="btn-secondary" onClick={fetchLeaderboard}>
+            <RefreshCw size={16} style={{ marginRight: '8px' }} />
+            Refresh
+          </button>
+          <button 
+            className="btn-primary" 
+            onClick={handleRescoreAll}
+            disabled={autoScoring}
+          >
+            <Zap size={16} style={{ marginRight: '8px' }} />
+            {autoScoring ? 'Rescoring...' : 'Rescore All with Decimals'}
+          </button>
+        </div>
       </div>
 
       {error && <div className="error">{error}</div>}

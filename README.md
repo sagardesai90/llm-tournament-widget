@@ -128,6 +128,7 @@ The system automatically evaluates responses using AI:
 
 - **Automatic Scoring**: Responses are scored immediately when generated
 - **AI Evaluation**: Uses **OpenAI's GPT-4o-mini** to assess response quality, relevance, and clarity
+- **Decimal Scoring**: Provides precise scores (e.g., 7.5, 8.3) for more granular ranking
 - **Structured Outputs**: Leverages OpenAI's latest structured outputs feature for reliable, schema-compliant evaluation
 - **Comprehensive Metrics**: Provides detailed scoring across multiple dimensions:
   - **Overall Score**: 1-10 scale for overall response quality
@@ -203,6 +204,7 @@ python data_utils.py import my_tournament_data.json
 - `POST /tournaments/{id}/auto-generate-all` - Generate responses for all prompts
 - `POST /tournaments/{id}/auto-score` - Automatically score a response using AI
 - `POST /tournaments/{id}/auto-score-all` - Automatically score all unscored responses
+- `POST /tournaments/{id}/rescore-all` - Rescore all responses with decimal precision (overwrites existing scores)
 - `POST /tournaments/{id}/results` - Submit a manual response
 - `GET /tournaments/{id}/leaderboard` - Get tournament results
 - `GET /ai-evaluation-schema` - Get the JSON schema for AI evaluation responses

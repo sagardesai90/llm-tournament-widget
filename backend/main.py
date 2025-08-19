@@ -792,12 +792,12 @@ Prompt: {prompt['content']}
 Response to Evaluate: {result['response']}
 
 Please evaluate this response and provide:
-1. A score from 1-10 (where 1-3=poor, 4-6=adequate, 7-8=good, 9-10=excellent)
+1. A precise score from 1.0-10.0 with decimal precision (e.g., 7.5, 8.3) where 1.0-3.0=poor, 4.0-6.0=adequate, 7.0-8.0=good, 9.0-10.0=excellent
 2. Brief feedback explaining the score
 3. 2-3 specific strengths
 4. 2-3 areas for improvement
 
-Format your response as a simple text evaluation.
+Format your response as a simple text evaluation. Be specific with decimal scores for more precise ranking.
 """
                 }
             ],
@@ -808,15 +808,31 @@ Format your response as a simple text evaluation.
         ai_feedback = response.choices[0].message.content
         
         try:
-            # Simple parsing of the text response
-            # Extract score (look for a number 1-10)
+            # Enhanced parsing for decimal scores
             import re
-            score_match = re.search(r'(\d+(?:\.\d+)?)/10|score[:\s]*(\d+(?:\.\d+)?)', ai_feedback.lower())
-            if score_match:
-                score = float(score_match.group(1) or score_match.group(2))
-                score = max(1, min(10, score))  # Clamp between 1-10
+            # Look for decimal scores in various formats: 7.5, 7.5/10, score: 7.5, etc.
+            score_patterns = [
+                r'(\d+\.\d+)/10',           # 7.5/10
+                r'score[:\s]*(\d+\.\d+)',   # score: 7.5
+                r'(\d+\.\d+)\s*out\s*of\s*10',  # 7.5 out of 10
+                r'(\d+\.\d+)',              # 7.5
+                r'(\d+)/10',                # 7/10 (fallback to integer)
+                r'score[:\s]*(\d+)'         # score: 7 (fallback to integer)
+            ]
+            
+            score = None
+            for pattern in score_patterns:
+                score_match = re.search(pattern, ai_feedback.lower())
+                if score_match:
+                    score = float(score_match.group(1))
+                    break
+            
+            if score is not None:
+                score = max(1.0, min(10.0, score))  # Clamp between 1.0-10.0
+                print(f"🎯 Extracted decimal score: {score}")
             else:
                 score = 7.0  # Default score if none found
+                print(f"⚠️ No score found, using default: {score}")
             
             # Use the full AI feedback as the feedback text
             feedback = ai_feedback
@@ -888,6 +904,8 @@ Format your response as a simple text evaluation.
 @app.post("/tournaments/{tournament_id}/auto-score-all")
 async def auto_score_all_responses(tournament_id: str):
     """Automatically score all unscored responses in a tournament"""
+    global tournaments, prompts, results
+    
     if tournament_id not in tournaments:
         raise HTTPException(status_code=404, detail="Tournament not found")
     
@@ -935,6 +953,75 @@ async def auto_score_all_responses(tournament_id: str):
         "total_unscored": len(unscored_results),
         "scored_count": scored_count,
         "failed_count": failed_count
+    }
+
+@app.post("/tournaments/{tournament_id}/rescore-all")
+async def rescore_all_responses(tournament_id: str):
+    """Rescore all responses in a tournament with decimal precision (overwrites existing scores)"""
+    global tournaments, prompts, results
+    
+    if tournament_id not in tournaments:
+        raise HTTPException(status_code=404, detail="Tournament not found")
+    
+    if not openai.api_key:
+        raise HTTPException(status_code=500, detail="OpenAI API key not configured")
+    
+    tournament = tournaments[tournament_id]
+    
+    # Find all results for this tournament (including already scored ones)
+    tournament_results = [
+        result_id for result_id, result in results.items()
+        if result.get("tournament_id") == tournament_id
+    ]
+    
+    if not tournament_results:
+        return {"message": "No responses found for this tournament"}
+    
+    print(f"🔄 Rescoring {len(tournament_results)} responses for tournament '{tournament['name']}'")
+    
+    scored_results = []
+    for result_id in tournament_results:
+        try:
+            print(f"🔄 Rescoring result {result_id}...")
+            
+            # Get the result and prompt
+            result = results[result_id]
+            prompt_id = result.get("prompt_id")
+            
+            if not prompt_id or prompt_id not in prompts:
+                print(f"⚠️ Skipping result {result_id}: prompt not found")
+                continue
+            
+            prompt = prompts[prompt_id]
+            
+            # Call the AI scoring function
+            score_request = {
+                "prompt_id": prompt_id,
+                "result_id": result_id
+            }
+            
+            score_result = await auto_score_response(tournament_id, score_request)
+            scored_results.append({
+                "result_id": result_id,
+                "score": score_result["score"],
+                "ai_evaluated": True
+            })
+            
+            print(f"✅ Rescored result {result_id} with score {score_result['score']}")
+            
+            # Small delay to avoid rate limiting
+            await asyncio.sleep(0.5)
+            
+        except Exception as e:
+            print(f"❌ Error rescoring result {result_id}: {str(e)}")
+            continue
+    
+    print(f"🏁 Completed rescoring {len(scored_results)} responses")
+    
+    return {
+        "message": f"Successfully rescored {len(scored_results)} responses with decimal precision",
+        "rescored_count": len(scored_results),
+        "results": scored_results
     }
 
 @app.get("/tournaments/{tournament_id}/results")
