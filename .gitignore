@@ -45,6 +45,11 @@ yarn-error.log*
 lerna-debug.log*
 .pnpm-debug.log*
 
+# Frontend package files (should not be committed)
+frontend/package-lock.json
+frontend/package.json
+frontend/tsconfig.json
+
 # Build outputs
 build/
 dist/
@@ -133,7 +138,7 @@ temp/
 
 # Data files (JSON files with tournament data)
 # data/
-*.json
+# *.json
 
 # Backup files
 *.bak

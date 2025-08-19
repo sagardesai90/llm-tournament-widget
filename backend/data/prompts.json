@@ -1,0 +1,20 @@
+{
+  "d00facc5-c6f5-4953-bc53-f59cc19cbd03": {
+    "id": "d00facc5-c6f5-4953-bc53-f59cc19cbd03",
+    "name": "Classic Economic Indicators",
+    "content": "What are the classic economic indicators that most reliably provide early warning of an incoming recession?",
+    "description": "Asks for traditional macroeconomic variables as early signals."
+  },
+  "324c8739-33c6-4a4f-a3d1-ae4840fc08ed": {
+    "id": "324c8739-33c6-4a4f-a3d1-ae4840fc08ed",
+    "name": "Alternative Data Sources",
+    "content": "What alternative, non-traditional data sources (besides stock market and GDP) have been used successfully as leading indicators for recessions?",
+    "description": "Searches for outside-the-box signals not typically monitored by mainstream economists."
+  },
+  "6346c19d-7bf4-4f56-a9b1-25a7d7163dce": {
+    "id": "6346c19d-7bf4-4f56-a9b1-25a7d7163dce",
+    "name": "Predictive Modeling Approach",
+    "content": "If you were to train a machine learning model to predict recessions, what set of input variables would you prioritize, and why?",
+    "description": "Invites the LLM to synthesize predictive modeling logic for recession risk forecasting."
+  }
+}
